@@ -3,7 +3,9 @@ CONFIG += console c++11
 CONFIG -= app_bundle
 CONFIG -= qt
 
-SOURCES += main.cpp
+SOURCES += main.cpp \
+    dynamicobjectremover.cpp \
+    imageprovider.cpp
 #LIBS += 'pkg-config --libs opencv'
 LIBS += -lopencv_face \
         -lopencv_shape \
@@ -24,4 +26,8 @@ LIBS += -lopencv_face \
         -lopencv_core \
         -lboost_system \
         -lboost_filesystem
+
+HEADERS += \
+    dynamicobjectremover.h \
+    imageprovider.h
 
