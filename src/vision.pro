@@ -5,8 +5,14 @@ CONFIG -= qt
 
 SOURCES += main.cpp \
     dynamicobjectremover.cpp \
-    imageprovider.cpp
+    imageprovider.cpp \
+    imagematcher.cpp
 #LIBS += 'pkg-config --libs opencv'
+
+LIBS += -L$$PWD/../ext/opencv-3.3.1/bin/lib/
+INCLUDEPATH += $$PWD/../ext/opencv-3.3.1/bin/include
+DEPENDPATH += $$PWD/../ext/opencv-3.3.1/bin/include
+
 LIBS += -lopencv_face \
         -lopencv_shape \
         -lopencv_stitching \
@@ -25,9 +31,12 @@ LIBS += -lopencv_face \
         -lopencv_flann \
         -lopencv_core \
         -lboost_system \
-        -lboost_filesystem
+        -lboost_filesystem \
+        -lopencv_xfeatures2d
 
 HEADERS += \
     dynamicobjectremover.h \
-    imageprovider.h
+    imageprovider.h \
+    imagematcher.h
+
 

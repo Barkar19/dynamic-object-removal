@@ -1,7 +1,10 @@
 #include "imageprovider.h"
 
-#include <opencv2/highgui.hpp>
+#include <opencv2/opencv.hpp>
+#include <iostream>
 
+using namespace boost;
+using namespace filesystem;
 ImageProvider::ImageProvider()
 {
 
@@ -9,16 +12,27 @@ ImageProvider::ImageProvider()
 
 vector<Mat> ImageProvider::getImagesFromFolder(string folderName)
 {
-    boost::filesystem::path p( folderName );
-    boost::filesystem::directory_iterator start(p);
-    boost::filesystem::directory_iterator end;
+
 
     vector<cv::Mat> images;
 
-    for( ; start != end; start++ )
+    directory_iterator it{folderName};
+    while (it != directory_iterator{})
     {
-        const string file = start->path().string();
-        images.push_back( imread( file ) );
+        if( is_regular_file( *it) )
+        {
+            const string file = it->path().string();
+//            std::cout << file << endl;
+            Mat img = imread( file );
+            Size maxSize(1920,1080);
+            if ( img.size().area() > maxSize.area() )
+            {
+                float ratio = sqrt( float(maxSize.area()) / img.size().area() );
+                resize( img,img, Size(), ratio, ratio);
+            }
+            images.push_back( img );
+        }
+        it++;
     }
     return images;
 }
