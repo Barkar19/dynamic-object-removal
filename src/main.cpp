@@ -54,26 +54,26 @@ int main(int argc, char **argv) {
   ImageProvider p;
   auto images = p.getImagesFromFolder( argv[1]);
 
-//  for( auto& img : images )
-//  {
-//      resize( img,img,Size(),0.3,0.3);
-//  }
+  for( auto& img : images )
+  {
+      resize( img,img,Size(),0.5,0.5);
+  }
 
   // Output image
     const ImageMatcher matcher;
 
     auto results = matcher.matchTo( images[0], images );
-    for ( auto r : results )
-    {
-        imshow( "img", r );
-        waitKey(0);
-    }
+//    for ( auto r : results )
+//    {
+//        imshow( "img", r );
+//        waitKey(0);
+//    }
 
     DynamicObjectRemover r;
     Mat out = r.reomveDynamicObjects( results );
 
-    imshow( "img", out);
-    waitKey(0);
+//    imshow( "img", out);
+//    waitKey(0);
 
     imwrite( std::string(argv[1]) + "_out.jpg", out);
 

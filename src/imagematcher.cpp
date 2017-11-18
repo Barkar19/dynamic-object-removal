@@ -28,6 +28,7 @@ vector<Mat> ImageMatcher::matchTo(Mat dst, vector<Mat> input) const
         else
         {
             currentSize = dst.size();
+            counter = 0;
         }
     }
     i = input.size();
@@ -73,44 +74,57 @@ Mat ImageMatcher::getHomography( Mat img_1, Mat img_2 ) const
 
     //-- Step 2: Matching descriptor vectors using FLANN matcher
     BFMatcher matcher/*(new flann::LshIndexParams(20, 10, 2))*/;
-    std::vector<DMatch> matches;
-    matcher.match(descriptors_1, descriptors_2, matches);
+    std::vector< std::vector<DMatch> > matches;
+//    matcher.match(descriptors_1, descriptors_2, matches);
+    matcher.knnMatch(descriptors_1, descriptors_2, matches, 2);
 
-    sort(matches.begin(), matches.end(),
+    std::vector<DMatch> good_matches;
+    for ( auto& m : matches )
+    {
+        if( m.size() == 2 && m[0].distance < m[1].distance * 0.75 )
+        {
+            good_matches.push_back( DMatch( m[0].queryIdx, m[0].trainIdx, m[0].distance ));
+        }
+    }
+
+
+
+    sort(good_matches.begin(), good_matches.end(),
          [](const DMatch &a, const DMatch &b) -> bool {
            return a.distance < b.distance;
          });
 
-    std::vector<DMatch> good_matches;
+    good_matches = std::vector<DMatch>( good_matches.begin(), good_matches.begin() + ( good_matches.size() > 300 ? 300 : good_matches.size() ) );
 
-    good_matches.push_back( matches[0] );
-    good_matches.push_back( matches[1] );
-    good_matches.push_back( matches[2] );
-    good_matches.push_back( matches[3] );
 
-    for (int i = 4; i < matches.size(); i++)
-    {
-        bool addMatch = true;
-//        for( const auto m : good_matches )
+//    good_matches.push_back( matches[0] );
+//    good_matches.push_back( matches[1] );
+//    good_matches.push_back( matches[2] );
+//    good_matches.push_back( matches[3] );
+
+//    for (int i = 4; i < matches.size(); i++)
+//    {
+//        bool addMatch = true;
+////        for( const auto m : good_matches )
+////        {
+//////            cerr << "\nDIST: " <<norm(keypoints_1[ m.queryIdx ].pt - keypoints_1[ matches[i].queryIdx ].pt );
+////            if ( norm(keypoints_1[ m.queryIdx ].pt - keypoints_1[ matches[i].queryIdx ].pt ) < 50 )
+////            {
+////                addMatch = false;
+////                break;
+////            }
+////        }
+//        if ( addMatch )
 //        {
-////            cerr << "\nDIST: " <<norm(keypoints_1[ m.queryIdx ].pt - keypoints_1[ matches[i].queryIdx ].pt );
-//            if ( norm(keypoints_1[ m.queryIdx ].pt - keypoints_1[ matches[i].queryIdx ].pt ) < 50 )
-//            {
-//                addMatch = false;
-//                break;
-//            }
+////            cout << "DIST: " << matches[i].distance << "\n";
+//            if ( matches[i].distance <= 2 * matches[0].distance)
+//                good_matches.push_back(matches[i]);
+////            if( good_matches.size() == 4)
+////            {
+////                break;
+////            }
 //        }
-        if ( addMatch )
-        {
-//            cout << "DIST: " << matches[i].distance << "\n";
-            if ( matches[i].distance <= 2 * matches[0].distance)
-                good_matches.push_back(matches[i]);
-//            if( good_matches.size() == 4)
-//            {
-//                break;
-//            }
-        }
-    }
+//    }
 //    cerr << "SIZE: " << good_matches.size();
 //    Mat img_matches;
 //    drawMatches(img_1, keypoints_1, img_2, keypoints_2, vector<DMatch>( matches.begin(), matches.begin() + 20), img_matches,
@@ -120,6 +134,7 @@ Mat ImageMatcher::getHomography( Mat img_1, Mat img_2 ) const
 //    imshow("Matches", img_matches);
 //    waitKey(0);
 
+    cout << "GOOD_MATCHES_SIZE: " << good_matches.size() << endl;
     vector<Point2f> source_points, destination_points;
 
     for (size_t i = 0; i < good_matches.size(); i++) {
@@ -135,9 +150,9 @@ Mat ImageMatcher::getHomography( Mat img_1, Mat img_2 ) const
     {
         result = getPerspectiveTransform(source_points, destination_points);
     }
-    else if ( false )
+    else if ( true )
     {
-        result =  findHomography(source_points, destination_points, CV_RANSAC);
+        result =  findHomography(source_points, destination_points, noArray(), CV_RANSAC, 4.0 );
     }
     else
     {
