@@ -12,8 +12,6 @@ ImageProvider::ImageProvider()
 
 vector<Mat> ImageProvider::getImagesFromFolder(string folderName)
 {
-
-
     vector<cv::Mat> images;
 
     directory_iterator it{folderName};
@@ -34,5 +32,34 @@ vector<Mat> ImageProvider::getImagesFromFolder(string folderName)
         }
         it++;
     }
+    return images;
+}
+
+vector<Mat> ImageProvider::getImagesFromVideo(string videoName)
+{
+    vector<cv::Mat> images;
+    VideoCapture cap( videoName );
+
+    while( true )
+    {
+        Mat img;
+        if ( cap.read( img ) )
+        {
+            Size maxSize(1280,720);
+            if ( img.size().area() > maxSize.area() )
+            {
+                float ratio = sqrt( float(maxSize.area()) / img.size().area() );
+                resize( img,img, Size(), ratio, ratio);
+            }
+            cvtColor( img, img, CV_BGR2HLS );
+            images.push_back( img );
+        }
+        else
+        {
+            break;
+        }
+
+    }
+
     return images;
 }

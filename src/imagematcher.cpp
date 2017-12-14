@@ -1,5 +1,5 @@
 #include "imagematcher.h"
-
+#include <limits>
 
 
 ImageMatcher::ImageMatcher()
@@ -42,10 +42,11 @@ vector<Mat> ImageMatcher::matchTo(Mat dst, vector<Mat> input) const
     return result;
 }
 
-Mat ImageMatcher::getHomography( Mat img_1, Mat img_2 ) const
+Mat ImageMatcher::getHomography( const Mat & src, const Mat & dst ) const
 {
-    cvtColor( img_1, img_1, CV_BGR2GRAY );
-    cvtColor( img_2, img_2, CV_BGR2GRAY );
+    Mat img_1,img_2;
+    cvtColor( src, img_1, CV_BGR2GRAY );
+    cvtColor( dst, img_2, CV_BGR2GRAY );
 
     //-- Step 1: Detect the keypoints
 //    Ptr<BRISK> detector = BRISK::create();
@@ -81,7 +82,7 @@ Mat ImageMatcher::getHomography( Mat img_1, Mat img_2 ) const
     std::vector<DMatch> good_matches;
     for ( auto& m : matches )
     {
-        if( m.size() == 2 && m[0].distance < m[1].distance * 0.75 )
+        if( m.size() == 2 && m[0].distance < m[1].distance * 1.75 )
         {
             good_matches.push_back( DMatch( m[0].queryIdx, m[0].trainIdx, m[0].distance ));
         }
@@ -94,7 +95,7 @@ Mat ImageMatcher::getHomography( Mat img_1, Mat img_2 ) const
            return a.distance < b.distance;
          });
 
-    good_matches = std::vector<DMatch>( good_matches.begin(), good_matches.begin() + ( good_matches.size() > 300 ? 300 : good_matches.size() ) );
+//    good_matches = std::vector<DMatch>( good_matches.begin(), good_matches.begin() + ( good_matches.size() > 300 ? 300 : good_matches.size() ) );
 
 
 //    good_matches.push_back( matches[0] );
@@ -268,3 +269,153 @@ std::pair<Mat,Mat> ImageMatcher::unifyCoordinates(Mat src, Mat dst) const
 
     return std::pair<Mat,Mat>( output_src, output_dst );
 }
+
+FrameMatch ImageMatcher::getFrameMatch(const Mat & src,const Mat & dst) const
+{
+//    imshow("src", src);
+//    imshow("dst", dst);
+//    waitKey(0);
+    Mat transf = getHomography(src, dst);
+    cout << transf << endl;
+    int src_w = src.cols;
+    int src_h = src.rows;
+    float data[] = { 0, src_w, src_w, 0,
+                     0, 0, src_h, src_h,
+                     1, 1, 1, 1};
+    transf.convertTo( transf, CV_32F);
+
+    Mat lin_homg_pts = Mat( 3,4, CV_32F, data );
+
+    Mat top_left_transf = transf * lin_homg_pts.col(0);
+    top_left_transf /= top_left_transf.at<float>(0,2);
+
+    Mat top_right_transf = transf * lin_homg_pts.col(1);
+    top_right_transf /= top_right_transf.at<float>(0,2);
+
+    Mat bottom_left_transf = transf * lin_homg_pts.col(2);
+    bottom_left_transf /= bottom_left_transf.at<float>(0,2);
+
+    Mat bottom_right_transf = transf * lin_homg_pts.col(3);
+    bottom_right_transf /= bottom_right_transf.at<float>(0,2);
+
+    FrameMatch result;
+
+    result.src_coords.top_left = Point2f( top_left_transf.at<float>(0,0),
+                               top_left_transf.at<float>(0,1));
+    result.src_coords.top_right = Point2f( top_right_transf.at<float>(0,0),
+                               top_right_transf.at<float>(0,1));
+    result.src_coords.bottom_left = Point2f( bottom_left_transf.at<float>(0,0),
+                               bottom_left_transf.at<float>(0,1));
+    result.src_coords.bottom_right = Point2f( bottom_right_transf.at<float>(0,0),
+                               bottom_right_transf.at<float>(0,1));
+
+    result.homography = transf;
+
+
+    return result;
+}
+
+void ImageMatcher::matchFrames(const Mat & dst, vector<Mat>& input) const
+{
+    vector< FrameMatch > frameMatches( input.size() );
+    for ( unsigned i = 0; i < input.size(); ++i )
+    {
+        frameMatches[i] = getFrameMatch(input[i], dst);
+        frameMatches[i].srcID = i;
+        cout << "Frame " << i << " matched!" << endl;
+    }
+    auto output =  unifyFrameMatches( frameMatches );
+
+    Size imageSize( std::floor( std::max( output[1].x, float(dst.cols)) - std::min( float(0.0), output[0].x) ),
+                   std::floor( std::max( output[1].y, float(dst.rows)) - std::min( float(0.0), output[0].y) ) );
+
+    for ( const FrameMatch & m : frameMatches )
+    {
+        Mat transf_in;
+        warpPerspective( input[m.srcID], transf_in, m.homography, imageSize);
+        input[m.srcID] = transf_in;
+        cout << "Frame " << m.srcID << " transformed!" << endl;
+    }
+}
+
+float ImageMatcher::getMinX( const FrameMatch& match ) const
+{
+    return std::min( {match.src_coords.top_left.x,
+                      match.src_coords.top_right.x,
+                      match.src_coords.bottom_left.x,
+                      match.src_coords.bottom_right.x});
+}
+
+float ImageMatcher::getMaxX( const FrameMatch& match ) const
+{
+    return std::max( {match.src_coords.top_left.x,
+                      match.src_coords.top_right.x,
+                      match.src_coords.bottom_left.x,
+                      match.src_coords.bottom_right.x});
+}
+
+float ImageMatcher::getMinY( const FrameMatch& match ) const
+{
+    return std::min( {match.src_coords.top_left.y,
+                      match.src_coords.top_right.y,
+                      match.src_coords.bottom_left.y,
+                      match.src_coords.bottom_right.y});
+}
+float ImageMatcher::getMaxY( const FrameMatch& match ) const
+{
+    return std::max( {match.src_coords.top_left.y,
+                      match.src_coords.top_right.y,
+                      match.src_coords.bottom_left.y,
+                      match.src_coords.bottom_right.y});
+}
+
+
+/* Unifies all frame matches to positive X and Y cooridnates,
+ * returns Size of new image, and offset of dst image
+ */
+vector<Point2f> ImageMatcher::unifyFrameMatches(vector<FrameMatch> &matches) const
+{
+    float minX = numeric_limits<float>::max();
+    float minY = numeric_limits<float>::max();
+    float maxX = numeric_limits<float>::min();
+    float maxY = numeric_limits<float>::min();
+
+
+    for ( const auto & m : matches )
+    {
+        float tmpMinX = getMinX( m );
+        float tmpMaxX = getMaxX( m );
+        float tmpMinY = getMinY( m );
+        float tmpMaxY = getMaxY( m );
+
+        minX = std::min( minX, tmpMinX);
+        maxX = std::max( maxX, tmpMaxX);
+        minY = std::min( minY, tmpMinY);
+        maxY = std::max( maxY, tmpMaxY);
+    }
+
+    float data1[] = { 1.0, 0, 0,
+                     0, 1, 0,
+                     0, 0, 1};
+    Mat new_transf( 3,3, CV_32FC1, data1);
+
+    int anchorX = 0, anchorY = 0;
+    if ( minX < 0)
+    {
+        anchorX = -minX;
+        new_transf.at<float>(0,2) += anchorX;
+    }
+    if ( minY < 0)
+    {
+        anchorY = -minY;
+        new_transf.at<float>(1,2) += anchorY;
+    }
+
+    for ( auto & m : matches )
+    {
+        m.homography = new_transf * m.homography;
+        m.homography /= m.homography.at<float>(2,2);
+    }
+    return { Point2f( minX, minY), Point2f( maxX, maxY), Point2f( anchorX, anchorY )};
+}
+

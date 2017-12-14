@@ -50,32 +50,34 @@ void matchImages( vector<Mat> input )
 
 int main(int argc, char **argv) {
 
-
+    string inputName = "barcelona_port.mkv";
   ImageProvider p;
-  auto images = p.getImagesFromFolder( argv[1]);
+  auto images = p.getImagesFromVideo( inputName );
 
-  for( auto& img : images )
-  {
-      resize( img,img,Size(),0.5,0.5);
-  }
+//  for( auto& img : images )
+//  {
+//      resize( img,img,Size(),0.5,0.5);
+////      imshow( "img", img);
+////      waitKey(100);
+//  }
 
-  // Output image
-    const ImageMatcher matcher;
+//  // Output image
+//    const ImageMatcher matcher;
 
-    auto results = matcher.matchTo( images[0], images );
-//    for ( auto r : results )
-//    {
-//        imshow( "img", r );
-//        waitKey(0);
-//    }
+//    matcher.matchFrames( images[images.size() / 2], images );
+////    for ( auto r : images )
+////    {
+////        imshow( "img", r );
+////        waitKey(0);
+////    }
 
     DynamicObjectRemover r;
-    Mat out = r.reomveDynamicObjects( results );
+    Mat out = r.reomveDynamicObjects( images );
 
-//    imshow( "img", out);
-//    waitKey(0);
+    imshow( "img", out);
+    waitKey(0);
 
-    imwrite( std::string(argv[1]) + "_out.jpg", out);
+    imwrite( inputName + "_out.jpg", out);
 
 
 //  matchImages(images);

@@ -13,6 +13,7 @@ public:
     ImageProvider();
 
     vector<Mat> getImagesFromFolder( string folderName );
+    vector<Mat> getImagesFromVideo( string videoName );
 };
 
 #endif // IMAGEPROVIDER_H
