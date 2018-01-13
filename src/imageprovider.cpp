@@ -10,7 +10,19 @@ ImageProvider::ImageProvider()
 
 }
 
-vector<Mat> ImageProvider::getImagesFromFolder(string folderName)
+vector<Mat> ImageProvider::getImages(string path)
+{
+    if ( is_regular_file( path ) )
+    {
+        return getImagesFromVideo( path );
+    }
+    else if ( is_directory( path ) )
+    {
+        return getImagesFromDirectory( path );
+    }
+}
+
+vector<Mat> ImageProvider::getImagesFromDirectory(string folderName)
 {
     vector<cv::Mat> images;
 
@@ -51,7 +63,7 @@ vector<Mat> ImageProvider::getImagesFromVideo(string videoName)
                 float ratio = sqrt( float(maxSize.area()) / img.size().area() );
                 resize( img,img, Size(), ratio, ratio);
             }
-            cvtColor( img, img, CV_BGR2HLS );
+//            cvtColor( img, img, CV_BGR2HLS );
             images.push_back( img );
         }
         else

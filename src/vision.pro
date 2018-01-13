@@ -2,6 +2,8 @@ TEMPLATE = app
 CONFIG += console c++11
 CONFIG -= app_bundle
 CONFIG -= qt
+QMAKE_CXXFLAGS += -std=c++11
+
 
 SOURCES += main.cpp \
     dynamicobjectremover.cpp \
@@ -32,6 +34,7 @@ LIBS += -lopencv_face \
         -lopencv_core \
         -lboost_system \
         -lboost_filesystem \
+        -lboost_program_options \
         -lopencv_xfeatures2d
 
 HEADERS += \

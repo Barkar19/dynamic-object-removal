@@ -12,7 +12,9 @@ class ImageProvider
 public:
     ImageProvider();
 
-    vector<Mat> getImagesFromFolder( string folderName );
+    vector<Mat> getImages( string path );
+
+    vector<Mat> getImagesFromDirectory( string folderName );
     vector<Mat> getImagesFromVideo( string videoName );
 };
 
