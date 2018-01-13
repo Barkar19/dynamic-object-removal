@@ -13,6 +13,7 @@
 #include "imageprovider.h"
 #include "imagematcher.h"
 #include "dynamicobjectremover.h"
+#include "xmlsettings.h"
 
 #include <boost/program_options.hpp>
 
@@ -23,9 +24,11 @@ using std::exception;
 
 namespace po = boost::program_options;
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
 
-    string input_path, output_path;
+
+    string input_path, output_path, config_path;
     try
     {
 
@@ -33,7 +36,8 @@ int main(int argc, char **argv) {
         desc.add_options()
         ("help,h", "produce help message")
         ("input,i", po::value<std::string>(), "set input source (directory or movie)")
-        ("output,o", po::value<std::string>(), "set output destination (name of jpg)");
+        ("output,o", po::value<std::string>(), "set output destination (name of image)")
+        ("config,c", po::value<std::string>(), "config file path");
 
         po::variables_map vm;
         po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -53,6 +57,18 @@ int main(int argc, char **argv) {
         else
         {
             cout << "Input path was not set!";
+            return 0;
+        }
+
+        if (vm.count("config"))
+        {
+            config_path = vm["config"].as<string>() ;
+            cout << "Config file path was set to \""
+                 << config_path << "\"\n";
+        }
+        else
+        {
+            cout << "Config path was not set!";
             return 0;
         }
 
@@ -98,6 +114,11 @@ int main(int argc, char **argv) {
             std::cout << "Input path does not exist!" << std::endl;
             return 0;
         }
+        if ( !boost::filesystem::exists( config_path ) )
+        {
+            std::cout << "Input path does not exist!" << std::endl;
+            return 0;
+        }
 
     }
     catch(exception& e)
@@ -120,20 +141,35 @@ int main(int argc, char **argv) {
     //      waitKey(100);
     }
 
-  // Output image
-    const ImageMatcher matcher;
-    matcher.matchFrames( images[images.size() / 2], images );
-    for ( auto r : images )
-    {
-        imshow( "img", r );
-        waitKey(0);
-    }
+//  // Output image
+//    const ImageMatcher matcher;
+//    matcher.matchFrames( images[images.size() / 2], images );
+////    for ( auto r : images )
+////    {
+////        imshow( "img", r );
+////        waitKey(0);
+////    }
 
+    XmlSettings settings;
+    settings.readSettings( config_path );
+    if ( settings.getColorspace() == "HLS" )
+    {
+        for ( auto& i : images )
+        {
+            cvtColor( i,i, CV_BGR2HLS);
+        }
+    }
     DynamicObjectRemover r;
+    r.SetProcessPipe( settings.getProcessPipe() );
     Mat out = r.reomveDynamicObjects( images );
 
+    if ( settings.getColorspace() == "HLS" )
+    {
+        cvtColor(out, out, CV_HLS2BGR);
+    }
     imshow( "Result " + output_path , out);
     waitKey(0);
+
 
     try
     {

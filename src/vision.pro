@@ -8,12 +8,14 @@ QMAKE_CXXFLAGS += -std=c++11
 SOURCES += main.cpp \
     dynamicobjectremover.cpp \
     imageprovider.cpp \
-    imagematcher.cpp
+    imagematcher.cpp \
+    xmlsettings.cpp \
+    imageprocesspipe.cpp
 #LIBS += 'pkg-config --libs opencv'
 
 LIBS += -L$$PWD/../ext/opencv-3.3.1/bin/lib/
 INCLUDEPATH += $$PWD/../ext/opencv-3.3.1/bin/include
-DEPENDPATH += $$PWD/../ext/opencv-3.3.1/bin/include
+INCLUDEPATH += $$PWD/../ext/rapidxml
 
 LIBS += -lopencv_face \
         -lopencv_shape \
@@ -40,6 +42,8 @@ LIBS += -lopencv_face \
 HEADERS += \
     dynamicobjectremover.h \
     imageprovider.h \
-    imagematcher.h
+    imagematcher.h \
+    xmlsettings.h \
+    imageprocesspipe.h
 
 

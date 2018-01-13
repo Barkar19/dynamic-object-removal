@@ -10,25 +10,227 @@ DynamicObjectRemover::DynamicObjectRemover()
 
 cv::Mat DynamicObjectRemover::reomveDynamicObjects(const vector<Mat> &images)
 {
-//    for( auto& m : images )
-//    {
-//         cvtColor( m, m, CV_BGR2HLS );
-//    }
     cv::Mat result(images.back().rows, images.back().cols, CV_8UC3, Scalar(128,0,128) );
     int i = 0;
     for( int x=0; x<result.rows; x++ )
     {
         for(int y=0; y<result.cols; y++)
         {
-            result.at<Vec3b>(x,y) = pixelMedian(images, x,y);
+            result.at<Vec3b>(x,y) = processPixel(images, x,y);
 //            cout << x << " " << y << endl;
-            cout << double(i) / double(result.rows * result.cols * 1.0) << endl;
+            cout << "\r" << double(i) / double(result.rows * result.cols * 1.0) << std::flush;
             i++;
         }
     }
-//    cvtColor( result, result, CV_HLS2BGR );
     return result;
 }
+
+void DynamicObjectRemover::SetProcessPipe(ImageProcessPipe aPipe)
+{
+    _oProcessPipe = aPipe;
+}
+
+Vec3b DynamicObjectRemover::processPixel(vector<Mat> mats, int x, int y)
+{
+    DescriptorsVector vec( mats.size() );
+    for ( unsigned i = 0; i < mats.size(); ++i )
+    {
+        const auto& mat = mats[i];
+        const auto& v = mat.at<Vec3b>(x,y);
+        vec[i] = PixelDescriptor( i, v, v[0] + v[1] + v[2]);
+    }
+    using namespace std::placeholders;
+
+    std::remove_if( vec.begin(), vec.end(), []( const PixelDescriptor& p)->bool
+    {
+        return p.value <= 0.0001;
+    });
+    if( vec.empty() )
+        return Vec3b();
+
+    for( unsigned i = 0; i < _oProcessPipe.getFunctionsCount(); ++i )
+    {
+        ImageProcessPipe::EFunction currentFunction = _oProcessPipe.getFunctionAt(i);
+        switch ( currentFunction )
+        {
+            case ImageProcessPipe::FUNCTION_MEDIAN:
+            {
+                reduceDescriptors( vec, calculateDescriptorsMedian, _oProcessPipe.getArgsAt(i)[0]);
+                break;
+            }
+            case ImageProcessPipe::FUNCTION_MEAN:
+            {
+                reduceDescriptors( vec, calculateDescriptorsMean, _oProcessPipe.getArgsAt(i)[0]);
+                break;
+            }
+            case ImageProcessPipe::FUNCTION_STDEV:
+            {
+                auto binding = std::bind( removeOutliersDescriptors, _1, _oProcessPipe.getArgsAt(i)[1]);
+                reduceDescriptors( vec, binding, _oProcessPipe.getArgsAt(i)[0]);
+                break;
+            }
+            case ImageProcessPipe::FUNCTION_CHANNEL:
+            {
+                changeDescriptorsToChannelValue( vec, _oProcessPipe.getArgsAt(i)[1]);
+                break;
+            }
+            case ImageProcessPipe::FUNCTION_LENGTH:
+            {
+                changeDescriptorsToLength( vec, _oProcessPipe.getArgsAt(i)[1]);
+                break;
+            }
+            case ImageProcessPipe::FUNCTION_VECTOR:
+            {
+                changeDescriptorsToVectorDiffsValue( vec, _oProcessPipe.getArgsAt(i)[1]);
+                break;
+            }
+        }
+    }
+    if( vec.empty() )
+        return Vec3b();
+    return vec.front().vec;
+}
+
+void DynamicObjectRemover::changeDescriptorsToChannelValue(DescriptorsVector &descriptors, unsigned channelId)
+{
+    for ( auto& pixel : descriptors )
+    {
+        pixel.value = pixel.vec[channelId] / 255.0;
+    }
+}
+
+void DynamicObjectRemover::changeDescriptorsToLength(DescriptorsVector &descriptors, float minkowskiFactor)
+{
+    for ( auto& pixel : descriptors )
+    {
+        pixel.value = std::pow( std::pow( pixel.vec[0] / 255.0, minkowskiFactor ) +
+                                std::pow( pixel.vec[1] / 255.0, minkowskiFactor ) +
+                                std::pow( pixel.vec[2] / 255.0, minkowskiFactor ) , 1.0 / minkowskiFactor );
+    }
+}
+
+void DynamicObjectRemover::changeDescriptorsToVectorDiffsValue(DescriptorsVector &descriptors, float minkowskiFactor)
+{
+    for ( auto& src : descriptors )
+    {
+        double sum = 0.0;
+        for( auto& dst : descriptors )
+        {
+            sum += std::pow(    std::pow( std::fabs(src.vec[0] - dst.vec[0]) / 255.0, minkowskiFactor ) +
+                                std::pow( std::fabs(src.vec[1] - dst.vec[1]) / 255.0, minkowskiFactor ) +
+                                std::pow( std::fabs(src.vec[2] - dst.vec[2]) / 255.0, minkowskiFactor ) , 1.0 / minkowskiFactor );
+        }
+        src.value = sum;
+    }
+}
+
+void DynamicObjectRemover::reduceDescriptors(DescriptorsVector &descriptors, std::function<DescriptorsVector (DescriptorsVector)> fun, unsigned size)
+{
+    DescriptorsVector result;
+    result.reserve( descriptors.size() );
+
+    unsigned begin = 0;
+    for ( ; (begin + size) < descriptors.size(); begin += size )
+    {
+        DescriptorsVector output = fun( DescriptorsVector(descriptors.begin() + begin, descriptors.begin() + begin + size) );
+        result.insert( result.end(), output.begin(), output.end() );
+    }
+    DescriptorsVector output = fun( DescriptorsVector(descriptors.begin() + begin, descriptors.end()) );
+    result.insert( result.end(), output.begin(), output.end() );
+
+    descriptors = result;
+}
+
+DescriptorsVector DynamicObjectRemover::calculateDescriptorsMedian(DescriptorsVector descriptors)
+{
+    size_t n = descriptors.size() / 2;
+    nth_element(descriptors.begin(), descriptors.begin()+n, descriptors.end(),
+               [](const PixelDescriptor& a,const PixelDescriptor& b)->bool
+               {
+                   return (a.value < b.value);
+               });
+
+    return {descriptors[n]};
+}
+
+DescriptorsVector DynamicObjectRemover::calculateDescriptorsMean(DescriptorsVector descriptors)
+{
+    double mean = 0.0;
+    for( auto& pixel : descriptors )
+    {
+        mean += pixel.value;
+    }
+    mean /= descriptors.size();
+
+    sort(descriptors.begin(), descriptors.end(),
+               [](const PixelDescriptor& a,const PixelDescriptor& b)->bool
+               {
+                   return (a.value < b.value);
+    });
+    for( auto& pixel : descriptors )
+    {
+        if ( pixel.value > mean )
+            return {pixel};
+    }
+    return {descriptors.front()};
+}
+
+DescriptorsVector DynamicObjectRemover::removeOutliersDescriptors(DescriptorsVector descriptors, double factor)
+{
+    double sum = 0.0;
+    std::for_each(std::begin(descriptors), std::end(descriptors),
+                  [&]( const PixelDescriptor pixel)
+                        {
+                            sum += pixel.value;
+                        });
+    double mean =  sum / descriptors.size();
+
+    double accum = 0.0;
+    std::for_each (std::begin(descriptors), std::end(descriptors),
+                   [&]( const PixelDescriptor pixel)
+                         {
+                             accum += (pixel.value - mean) * (pixel.value - mean);
+                         });
+
+    double stdev = sqrt(accum / (descriptors.size()-1));
+
+    DescriptorsVector result;
+    result.reserve( descriptors.size() );
+    for( unsigned i = 0; i < descriptors.size(); ++i )
+    {
+        if( std::fabs(descriptors[i].value - mean) <= factor * stdev )
+            result.push_back( descriptors[i] );
+    }
+    return result;
+}
+
+DescriptorsVector DynamicObjectRemover::removeSubvectors(DescriptorsVector descriptors, double factor)
+{
+    vector<double> v( vecs.size() );
+    for( unsigned i = 0; i < vecs.size(); ++i )
+    {
+        v[i] = norm( vecs[i], NORM_L2 );
+    }
+    double sum = std::accumulate(std::begin(v), std::end(v), 0.0);
+    double mean =  sum / v.size();
+
+    double accum = 0.0;
+    std::for_each (std::begin(v), std::end(v), [&](const double d) {
+        accum += (d - mean) * (d - mean);
+    });
+
+    double stdev = sqrt(accum / (v.size()-1));
+
+//    if ( stdev / mean > factor ) cout << "REMOVED! " << vecs.size() <<"std = "<< stdev / mean << endl;
+    return (stdev / mean > factor) ? vector<Vec3b>() : vecs;
+}
+
+DescriptorsVector DynamicObjectRemover::findMostStableSubvector(DescriptorsVector descriptors, unsigned factor)
+{
+
+}
+
+
 
 Vec3b DynamicObjectRemover::differentialPixel( vector<cv::Mat> mats, int x, int y )
 {
@@ -177,9 +379,9 @@ Vec3b DynamicObjectRemover::medianVector( vector<cv::Vec3b> v )
 //    }
     vector<double> values(v.size(), 0);
 
-    for( int i = 0; i < v.size(); ++i )
+    for( unsigned i = 0; i < v.size(); ++i )
     {
-        for ( int j = 0; j < v.size(); ++j  )
+        for ( unsigned j = 0; j < v.size(); ++j  )
         {
             auto tmp = v[i] - v[j];
             values[i] += cv::norm( tmp, NORM_L1);
@@ -199,7 +401,7 @@ Vec3b DynamicObjectRemover::medianVector( vector<cv::Vec3b> v )
 Vec3b DynamicObjectRemover::medianVectorLength( vector<cv::Vec3b> v )
 {
     vector<double> lengths( v.size() );
-    for( int i = 0; i < v.size(); ++i )
+    for( unsigned i = 0; i < v.size(); ++i )
     {
         lengths[i] = norm( v[i], NORM_L2 );
     }
@@ -211,6 +413,7 @@ Vec3b DynamicObjectRemover::medianVectorLength( vector<cv::Vec3b> v )
         if ( copy[i] == *median_it )
             return v[i];
     }
+    return v[0];
 }
 
 Vec3b DynamicObjectRemover::medianChannel( vector<cv::Vec3b> v )
@@ -261,7 +464,7 @@ Vec3b DynamicObjectRemover::meanVectorLength( vector<cv::Vec3b> v )
 //    return Vec3b(ch[0]/v.size(), ch[1]/v.size(), ch[2]/v.size());
     vector<double> lengths( v.size() );
     double mean = 0.0;
-    for( int i = 0; i < v.size(); ++i )
+    for( unsigned i = 0; i < v.size(); ++i )
     {
         lengths[i] = norm( v[i], NORM_L2 );
         mean += lengths[i];
@@ -291,7 +494,7 @@ Vec3b DynamicObjectRemover::meanVectorLength( vector<cv::Vec3b> v )
 vector<Vec3b> DynamicObjectRemover::removeOutliers( vector<cv::Vec3b> vecs, double factor )
 {
     vector<double> v( vecs.size() );
-    for( int i = 0; i < vecs.size(); ++i )
+    for( unsigned i = 0; i < vecs.size(); ++i )
     {
         v[i] = norm( vecs[i], NORM_L2 );
     }
@@ -306,7 +509,7 @@ vector<Vec3b> DynamicObjectRemover::removeOutliers( vector<cv::Vec3b> vecs, doub
     double stdev = sqrt(accum / (v.size()-1));
 
     vector<Vec3b> result;
-    for( int i = 0; i < vecs.size(); ++i )
+    for( unsigned i = 0; i < vecs.size(); ++i )
     {
         if( v[i] <= m + factor * stdev )
             result.push_back( vecs[i] );
@@ -318,7 +521,7 @@ vector<Vec3b> DynamicObjectRemover::removeOutliers( vector<cv::Vec3b> vecs, doub
 vector<Vec3b> DynamicObjectRemover::removeStdev( vector<cv::Vec3b> vecs, double factor )
 {
     vector<double> v( vecs.size() );
-    for( int i = 0; i < vecs.size(); ++i )
+    for( unsigned i = 0; i < vecs.size(); ++i )
     {
         v[i] = norm( vecs[i], NORM_L2 );
     }
@@ -349,7 +552,7 @@ vector<Vec3b> DynamicObjectRemover::stableStdev( vector<cv::Vec3b> vecs, unsigne
         sample_vecs = removeOutliers( sample_vecs, 0.5 );
 
         vector<double> sample( sample_vecs.size() );
-        for( int i = 0; i < sample_vecs.size(); ++i )
+        for( unsigned i = 0; i < sample_vecs.size(); ++i )
         {
             sample[i] = norm( sample_vecs[i], NORM_L2 );
         }
@@ -373,7 +576,7 @@ vector<Vec3b> DynamicObjectRemover::stableStdev( vector<cv::Vec3b> vecs, unsigne
         sample_vecs = removeOutliers( sample_vecs, 0.5 );
 
         vector<double> sample( sample_vecs.size() );
-        for( int i = 0; i < sample_vecs.size(); ++i )
+        for( unsigned i = 0; i < sample_vecs.size(); ++i )
         {
             sample[i] = norm( sample_vecs[i], NORM_L2 );
         }
@@ -424,7 +627,7 @@ vector<Vec3b> DynamicObjectRemover::stableStdev( vector<cv::Vec3b> vecs, unsigne
 vector<Vec3b> DynamicObjectRemover::reduce( vector<cv::Vec3b> vec, std::function<vector<Vec3b>(vector<cv::Vec3b>)> fun, int size)
 {
     vector<Vec3b> result;
-    int begin = 0;
+    unsigned begin = 0;
     for ( ; (begin + size) < vec.size(); begin += size )
     {
         vector<Vec3b> output = fun( vector<Vec3b>(vec.begin() + begin, vec.begin() + begin + size) );
@@ -441,7 +644,7 @@ vector<Vec3b> DynamicObjectRemover::reduce( vector<cv::Vec3b> vec, std::function
 {
     vector<Vec3b> result;
     result.reserve( vec.size() / size);
-    int begin = 0;
+    unsigned begin = 0;
     for ( ; (begin + size) < vec.size(); begin += size )
     {
         result.push_back(fun( vector<Vec3b>(vec.begin() + begin, vec.begin() + begin + size) ));
