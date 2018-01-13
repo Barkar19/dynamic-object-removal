@@ -83,9 +83,9 @@ ImageProcessPipe::EFunction XmlSettings::readFunctionName( xml_node<> * pNode )
     {
         functionType = ImageProcessPipe::FUNCTION_MEAN;
     }
-    else if ( type == "stdev" )
+    else if ( type == "outliers" )
     {
-        functionType = ImageProcessPipe::FUNCTION_STDEV;
+        functionType = ImageProcessPipe::FUNCTION_OUTLIERS;
     }
     else if ( type == "channel" )
     {
@@ -98,6 +98,14 @@ ImageProcessPipe::EFunction XmlSettings::readFunctionName( xml_node<> * pNode )
     else if ( type == "vector" )
     {
         functionType = ImageProcessPipe::FUNCTION_VECTOR;
+    }
+    else if ( type == "remove_unstable" )
+    {
+        functionType = ImageProcessPipe::FUNCTION_REMOVE_UNSTABLE;
+    }
+    else if ( type == "most_stable" )
+    {
+        functionType = ImageProcessPipe::FUNCTION_MOST_STABLE;
     }
     else
     {

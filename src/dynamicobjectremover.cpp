@@ -51,40 +51,57 @@ Vec3b DynamicObjectRemover::processPixel(vector<Mat> mats, int x, int y)
     for( unsigned i = 0; i < _oProcessPipe.getFunctionsCount(); ++i )
     {
         ImageProcessPipe::EFunction currentFunction = _oProcessPipe.getFunctionAt(i);
+        unsigned size = _oProcessPipe.getArgsAt(i)[0];
+        std::function<DescriptorsVector(DescriptorsVector)> binding;
         switch ( currentFunction )
         {
-            case ImageProcessPipe::FUNCTION_MEDIAN:
-            {
-                reduceDescriptors( vec, calculateDescriptorsMedian, _oProcessPipe.getArgsAt(i)[0]);
-                break;
-            }
-            case ImageProcessPipe::FUNCTION_MEAN:
-            {
-                reduceDescriptors( vec, calculateDescriptorsMean, _oProcessPipe.getArgsAt(i)[0]);
-                break;
-            }
-            case ImageProcessPipe::FUNCTION_STDEV:
-            {
-                auto binding = std::bind( removeOutliersDescriptors, _1, _oProcessPipe.getArgsAt(i)[1]);
-                reduceDescriptors( vec, binding, _oProcessPipe.getArgsAt(i)[0]);
-                break;
-            }
             case ImageProcessPipe::FUNCTION_CHANNEL:
             {
                 changeDescriptorsToChannelValue( vec, _oProcessPipe.getArgsAt(i)[1]);
-                break;
+                continue;
             }
             case ImageProcessPipe::FUNCTION_LENGTH:
             {
                 changeDescriptorsToLength( vec, _oProcessPipe.getArgsAt(i)[1]);
-                break;
+                continue;
             }
             case ImageProcessPipe::FUNCTION_VECTOR:
             {
                 changeDescriptorsToVectorDiffsValue( vec, _oProcessPipe.getArgsAt(i)[1]);
+                continue;
+            }
+            case ImageProcessPipe::FUNCTION_MEDIAN:
+            {
+                binding = calculateDescriptorsMedian;
                 break;
             }
+            case ImageProcessPipe::FUNCTION_MEAN:
+            {
+                binding = calculateDescriptorsMean;
+                break;
+            }
+            case ImageProcessPipe::FUNCTION_OUTLIERS:
+            {
+                binding = std::bind( removeOutliersDescriptors, _1, _oProcessPipe.getArgsAt(i)[1]);
+                break;
+            }
+            case ImageProcessPipe::FUNCTION_REMOVE_UNSTABLE:
+            {
+                binding = std::bind( removeSubvectors, _1, _oProcessPipe.getArgsAt(i)[1]);
+                break;
+            }
+            case ImageProcessPipe::FUNCTION_MOST_STABLE:
+            {
+                binding = std::bind( findMostStableSubvector, _1, _oProcessPipe.getArgsAt(i)[1]);
+                break;
+            }
+            case ImageProcessPipe::FUNCTION_INVALID:
+            {
+                continue;
+            }
+
         }
+        reduceDescriptors( vec, binding, size);
     }
     if( vec.empty() )
         return Vec3b();
@@ -175,7 +192,7 @@ DescriptorsVector DynamicObjectRemover::calculateDescriptorsMean(DescriptorsVect
     return {descriptors.front()};
 }
 
-DescriptorsVector DynamicObjectRemover::removeOutliersDescriptors(DescriptorsVector descriptors, double factor)
+pair<double,double> DynamicObjectRemover::calculateStats( const DescriptorsVector& descriptors )
 {
     double sum = 0.0;
     std::for_each(std::begin(descriptors), std::end(descriptors),
@@ -193,7 +210,15 @@ DescriptorsVector DynamicObjectRemover::removeOutliersDescriptors(DescriptorsVec
                          });
 
     double stdev = sqrt(accum / (descriptors.size()-1));
+    return pair<double,double>( mean, stdev );
+}
 
+DescriptorsVector DynamicObjectRemover::removeOutliersDescriptors(DescriptorsVector descriptors, double factor)
+{
+    const auto stats = calculateStats( descriptors );
+
+    const double mean = stats.first;
+    const double stdev = stats.second;
     DescriptorsVector result;
     result.reserve( descriptors.size() );
     for( unsigned i = 0; i < descriptors.size(); ++i )
@@ -206,28 +231,45 @@ DescriptorsVector DynamicObjectRemover::removeOutliersDescriptors(DescriptorsVec
 
 DescriptorsVector DynamicObjectRemover::removeSubvectors(DescriptorsVector descriptors, double factor)
 {
-    vector<double> v( vecs.size() );
-    for( unsigned i = 0; i < vecs.size(); ++i )
-    {
-        v[i] = norm( vecs[i], NORM_L2 );
-    }
-    double sum = std::accumulate(std::begin(v), std::end(v), 0.0);
-    double mean =  sum / v.size();
+    auto stats = calculateStats( descriptors );
+    const double mean = stats.first;
+    const double stdev = stats.second;
 
-    double accum = 0.0;
-    std::for_each (std::begin(v), std::end(v), [&](const double d) {
-        accum += (d - mean) * (d - mean);
-    });
-
-    double stdev = sqrt(accum / (v.size()-1));
-
-//    if ( stdev / mean > factor ) cout << "REMOVED! " << vecs.size() <<"std = "<< stdev / mean << endl;
-    return (stdev / mean > factor) ? vector<Vec3b>() : vecs;
+    return (stdev / mean > factor) ? DescriptorsVector() : descriptors;
 }
 
-DescriptorsVector DynamicObjectRemover::findMostStableSubvector(DescriptorsVector descriptors, unsigned factor)
+DescriptorsVector DynamicObjectRemover::findMostStableSubvector(DescriptorsVector descriptors, unsigned size)
 {
+    if( descriptors.empty() )
+        return DescriptorsVector();
+    vector<pair<pair<int,int>, double>> results;
+    int begin = 0;
+    for ( ; (begin + size) < descriptors.size(); begin += size )
+    {
+        DescriptorsVector sample(descriptors.begin() + begin, descriptors.begin() + begin + size);
+        const auto stats = calculateStats( sample );
+        const double stdev = stats.second;
 
+        results.push_back( pair<pair<int,int>,double>(pair<int,int>(begin, begin+size), stdev));
+
+    }
+    {
+        DescriptorsVector sample( descriptors.begin() + begin, descriptors.end() );
+        const auto stats = calculateStats( sample );
+        const double stdev = stats.second;
+
+        results.push_back( pair<pair<int,int>,double>(pair<int,int>(begin, begin+size), stdev));
+
+    }
+
+    auto element = min_element( results.begin(), results.end(),
+          [](const pair<pair<int,int>,double>& a,const pair<pair<int,int>,double>& b)->bool
+            {
+                return a.second < b.second;
+            }
+        );
+    pair<int,int> final = (*element).first;
+    return DescriptorsVector( descriptors.begin() + final.first, descriptors.begin() + final.second);
 }
 
 

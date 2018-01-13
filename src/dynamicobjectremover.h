@@ -41,6 +41,7 @@ private:
 
     void reduceDescriptors(DescriptorsVector& descriptors, std::function<DescriptorsVector(DescriptorsVector)> fun, unsigned size );
 
+    static pair<double, double> calculateStats(const DescriptorsVector &descriptors);
     static DescriptorsVector calculateDescriptorsMedian( DescriptorsVector descriptors );
     static DescriptorsVector calculateDescriptorsMean( DescriptorsVector descriptors );
     static DescriptorsVector removeOutliersDescriptors( DescriptorsVector descriptors, double factor );

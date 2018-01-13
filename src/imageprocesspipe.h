@@ -15,10 +15,12 @@ public:
         FUNCTION_INVALID,
         FUNCTION_MEDIAN,
         FUNCTION_MEAN,
-        FUNCTION_STDEV,
+        FUNCTION_OUTLIERS,
         FUNCTION_CHANNEL,
         FUNCTION_LENGTH,
         FUNCTION_VECTOR,
+        FUNCTION_REMOVE_UNSTABLE,
+        FUNCTION_MOST_STABLE
     };
     ImageProcessPipe();
 

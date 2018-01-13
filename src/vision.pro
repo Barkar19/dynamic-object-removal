@@ -30,7 +30,6 @@ LIBS += -lopencv_face \
         -lopencv_imgcodecs \
         -lopencv_video \
         -lopencv_photo \
-        -lopencv_ml \
         -lopencv_imgproc \
         -lopencv_flann \
         -lopencv_core \
