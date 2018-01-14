@@ -32,32 +32,66 @@ void XmlSettings::readSettings(string path)
 
     if( pRoot )
     {
-        xml_node<>* pColorNode = pRoot->first_node("colorspace");
-        if( pColorNode )
+        readPreprocessingNode( pRoot->first_node("preprocessing"));
+        readProcessingNode( pRoot->first_node("processing"));
+
+    }
+    return;
+}
+
+void XmlSettings::readPreprocessingNode( xml_node<> *pRoot)
+{
+    xml_node<>* pColorNode = pRoot->first_node("colorspace");
+    if( pRoot and pColorNode )
+    {
+        auto pAttr = pColorNode->first_attribute("value");
+        if( pAttr )
         {
-            auto pAttr = pColorNode->first_attribute("name");
-            if( pAttr )
-            {
-                _strColorspace = pAttr->value();
-            }
-            else
-            {
-                _strColorspace = "bgr";
-            }
+            _strColorspace = pAttr->value();
         }
         else
         {
-            _strColorspace = "bgr";
-        }
-        for(xml_node<> *pFunctionNode = pRoot->first_node("function"); pFunctionNode; pFunctionNode=pFunctionNode->next_sibling())
-        {
-            auto functionType = readFunctionName( pFunctionNode );
-            double functionInputSize = readFunctionInputSize( pFunctionNode );
-            double functionParameter = readFunctionParameter( pFunctionNode );
-            _oPipe.appendFunction( functionType, {functionInputSize, functionParameter});
+            _strColorspace = "BGR";
         }
     }
-    return;
+    else
+    {
+        _strColorspace = "BGR";
+    }
+    xml_node<>* pMatchNode = pRoot->first_node("match");
+    if( pRoot and pMatchNode )
+    {
+        auto pAttr = pMatchNode->first_attribute("value");
+        if( pAttr )
+        {
+            bMatch = boost::to_upper_copy<std::string>(pAttr->value()) == "TRUE";
+        }
+        else
+        {
+            bMatch = false;
+        }
+    }
+    else
+    {
+        bMatch = false;
+    }
+
+    xml_node<>* pResizeNode = pRoot->first_node("resize");
+    if( pRoot and pResizeNode )
+        dResizeValue = readAttr( pResizeNode->first_attribute("value"), -1.0 );
+    else
+        dResizeValue = -1.0;
+}
+
+void XmlSettings::readProcessingNode( xml_node<> *pRoot)
+{
+    for(xml_node<> *pFunctionNode = pRoot->first_node("function"); pFunctionNode; pFunctionNode=pFunctionNode->next_sibling())
+    {
+        auto functionType = readFunctionName( pFunctionNode );
+        double functionInputSize = readFunctionInputSize( pFunctionNode );
+        double functionParameter = readFunctionParameter( pFunctionNode );
+        _oPipe.appendFunction( functionType, {functionInputSize, functionParameter});
+    }
 }
 
 ImageProcessPipe XmlSettings::getProcessPipe()

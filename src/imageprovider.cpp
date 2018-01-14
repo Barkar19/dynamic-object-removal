@@ -27,6 +27,7 @@ vector<Mat> ImageProvider::getImagesFromDirectory(string folderName)
     vector<cv::Mat> images;
 
     directory_iterator it{folderName};
+    int i = 1;
     while (it != directory_iterator{})
     {
         if( is_regular_file( *it) )
@@ -34,13 +35,15 @@ vector<Mat> ImageProvider::getImagesFromDirectory(string folderName)
             const string file = it->path().string();
 //            std::cout << file << endl;
             Mat img = imread( file );
-            Size maxSize(1920,1080);
+            Size maxSize(1280,720);
             if ( img.size().area() > maxSize.area() )
             {
                 float ratio = sqrt( float(maxSize.area()) / img.size().area() );
                 resize( img,img, Size(), ratio, ratio);
             }
             images.push_back( img );
+            cout << "\r" << setw(6) << right << i <<" frames loaded." << std::flush;
+            i++;
         }
         it++;
     }
@@ -52,6 +55,7 @@ vector<Mat> ImageProvider::getImagesFromVideo(string videoName)
     vector<cv::Mat> images;
     VideoCapture cap( videoName );
 
+    int i = 1;
     while( true )
     {
         Mat img;
@@ -65,6 +69,8 @@ vector<Mat> ImageProvider::getImagesFromVideo(string videoName)
             }
 //            cvtColor( img, img, CV_BGR2HLS );
             images.push_back( img );
+            cout << "\r" << setw(6) << right << i <<" frames loaded." << std::flush;
+            i++;
         }
         else
         {

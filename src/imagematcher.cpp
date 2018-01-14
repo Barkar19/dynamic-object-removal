@@ -134,8 +134,6 @@ Mat ImageMatcher::getHomography( const Mat & src, const Mat & dst ) const
 //    //-- Show detected matches
 //    imshow("Matches", img_matches);
 //    waitKey(0);
-
-    cout << "GOOD_MATCHES_SIZE: " << good_matches.size() << endl;
     vector<Point2f> source_points, destination_points;
 
     for (size_t i = 0; i < good_matches.size(); i++) {
@@ -181,7 +179,6 @@ Mat ImageMatcher::getHomography( const Mat & src, const Mat & dst ) const
 std::pair<Mat,Mat> ImageMatcher::unifyCoordinates(Mat src, Mat dst) const
 {
     Mat transf = getHomography(src, dst);
-    cout << transf << endl;
     int src_w = src.cols;
     int src_h = src.rows;
     float data[] = { 0, src_w, src_w, 0,
@@ -276,7 +273,6 @@ FrameMatch ImageMatcher::getFrameMatch(const Mat & src,const Mat & dst) const
 //    imshow("dst", dst);
 //    waitKey(0);
     Mat transf = getHomography(src, dst);
-    cout << transf << endl;
     int src_w = src.cols;
     int src_h = src.rows;
     float data[] = { 0, src_w, src_w, 0,
@@ -317,25 +313,31 @@ FrameMatch ImageMatcher::getFrameMatch(const Mat & src,const Mat & dst) const
 
 void ImageMatcher::matchFrames(const Mat & dst, vector<Mat>& input) const
 {
+    cout << "Calculating transformation matrices...\n";
     vector< FrameMatch > frameMatches( input.size() );
     for ( unsigned i = 0; i < input.size(); ++i )
     {
         frameMatches[i] = getFrameMatch(input[i], dst);
         frameMatches[i].srcID = i;
-        cout << "Frame " << i << " matched!" << endl;
+        cout << "\r[ " << setw(5) << right << std::fixed  << std::setprecision(1) << 100 * double(i) / input.size() << "% ]"<< std::flush;
     }
+    cout << "\r[ " << setw(5) << right << std::fixed  << std::setprecision(1) << 100.0 << "% ]"<< std::flush;
+    cout << "\nDONE.\n";
     auto output =  unifyFrameMatches( frameMatches );
 
     Size imageSize( std::floor( std::max( output[1].x, float(dst.cols)) - std::min( float(0.0), output[0].x) ),
                    std::floor( std::max( output[1].y, float(dst.rows)) - std::min( float(0.0), output[0].y) ) );
 
+    cout << "Transforming images...\n";
     for ( const FrameMatch & m : frameMatches )
     {
         Mat transf_in;
         warpPerspective( input[m.srcID], transf_in, m.homography, imageSize);
         input[m.srcID] = transf_in;
-        cout << "Frame " << m.srcID << " transformed!" << endl;
+        cout << "\r[ " << setw(5) << right << std::fixed  << std::setprecision(1) << 100 * double(m.srcID) / input.size() << "% ]"<< std::flush;
     }
+    cout << "\r[ " << setw(5) << right << std::fixed  << std::setprecision(1) << 100.0 << "% ]"<< std::flush;
+    cout << "\nDONE.\n";
 }
 
 float ImageMatcher::getMinX( const FrameMatch& match ) const

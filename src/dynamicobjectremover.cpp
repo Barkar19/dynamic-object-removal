@@ -18,10 +18,11 @@ cv::Mat DynamicObjectRemover::reomveDynamicObjects(const vector<Mat> &images)
         {
             result.at<Vec3b>(x,y) = processPixel(images, x,y);
 //            cout << x << " " << y << endl;
-            cout << "\r" << double(i) / double(result.rows * result.cols * 1.0) << std::flush;
+            cout << "\r[ " << setw(5) << right << std::fixed  << std::setprecision(1) << 100.0 * double(i) / (result.rows * result.cols) << "% ]"<< std::flush;
             i++;
         }
     }
+    cout << "\r[ " << setw(5) << right << std::fixed  << std::setprecision(1) << 100.0L  << "% ]"<< std::flush;
     return result;
 }
 
@@ -51,7 +52,6 @@ Vec3b DynamicObjectRemover::processPixel(vector<Mat> mats, int x, int y)
     for( unsigned i = 0; i < _oProcessPipe.getFunctionsCount(); ++i )
     {
         ImageProcessPipe::EFunction currentFunction = _oProcessPipe.getFunctionAt(i);
-        unsigned size = _oProcessPipe.getArgsAt(i)[0];
         std::function<DescriptorsVector(DescriptorsVector)> binding;
         switch ( currentFunction )
         {
@@ -101,10 +101,16 @@ Vec3b DynamicObjectRemover::processPixel(vector<Mat> mats, int x, int y)
             }
 
         }
+        if( vec.empty() )
+            break;
+        unsigned size = _oProcessPipe.getArgsAt(i)[0];
+        if ( size == -1 )
+            size = vec.size();
+
         reduceDescriptors( vec, binding, size);
     }
     if( vec.empty() )
-        return Vec3b();
+        return Vec3b(255,255,255);
     return vec.front().vec;
 }
 
@@ -179,17 +185,20 @@ DescriptorsVector DynamicObjectRemover::calculateDescriptorsMean(DescriptorsVect
     }
     mean /= descriptors.size();
 
-    sort(descriptors.begin(), descriptors.end(),
-               [](const PixelDescriptor& a,const PixelDescriptor& b)->bool
-               {
-                   return (a.value < b.value);
-    });
-    for( auto& pixel : descriptors )
+    auto it = descriptors.begin();
+    double min = numeric_limits<double>::max();
+    auto best = it;
+    for ( ; it != descriptors.end(); it++ )
     {
-        if ( pixel.value > mean )
-            return {pixel};
+        double tmp = fabs( it->value - mean);
+        if ( tmp < min )
+        {
+            min = tmp;
+            best = it;
+        }
+
     }
-    return {descriptors.front()};
+    return { *best };
 }
 
 pair<double,double> DynamicObjectRemover::calculateStats( const DescriptorsVector& descriptors )

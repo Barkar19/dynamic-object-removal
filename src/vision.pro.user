@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE QtCreatorProject>
-<!-- Written by QtCreator 4.5.0, 2018-01-13T21:32:56. -->
+<!-- Written by QtCreator 4.5.0, 2018-01-13T23:37:24. -->
 <qtcreator>
  <data>
   <variable>EnvironmentId</variable>
@@ -246,7 +246,7 @@
     <value type="QString" key="ProjectExplorer.ProjectConfiguration.DisplayName"></value>
     <value type="QString" key="ProjectExplorer.ProjectConfiguration.Id">Qt4ProjectManager.Qt4RunConfiguration:/home/bartek/Studia/vision/src/vision.pro</value>
     <value type="bool" key="QmakeProjectManager.QmakeRunConfiguration.UseLibrarySearchPath">true</value>
-    <value type="QString" key="Qt4ProjectManager.Qt4RunConfiguration.CommandLineArguments">-i istanbul_cuted_frames -o cos_dziwnego.lol -c config.xml</value>
+    <value type="QString" key="Qt4ProjectManager.Qt4RunConfiguration.CommandLineArguments">-i istanbul_cuted.webm -o cos_dziwnego.lol -c config.xml</value>
     <value type="QString" key="Qt4ProjectManager.Qt4RunConfiguration.ProFile">vision.pro</value>
     <value type="bool" key="Qt4ProjectManager.Qt4RunConfiguration.UseDyldImageSuffix">false</value>
     <value type="bool" key="Qt4ProjectManager.Qt4RunConfiguration.UseTerminal">false</value>

@@ -18,7 +18,13 @@ public:
     ImageProcessPipe getProcessPipe();
 
     string getColorspace();
+    bool bMatch;
+    double dResizeValue;
 private:
+    void readPreprocessingNode(xml_node<> *pNode);
+    void readProcessingNode(xml_node<> *pNode);
+
+
     double readAttr(xml_attribute<> *pAttr, double defValue);
 
     ImageProcessPipe::EFunction readFunctionName(xml_node<> *pNode);
